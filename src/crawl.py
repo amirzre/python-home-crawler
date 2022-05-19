@@ -3,6 +3,7 @@ import requests
 from bs4 import BeautifulSoup
 from config import BASE_LINK, STORAGE_TYPE
 from storage import FileStorage, MongoStorage
+from parser import AdvertisementDataParser
 
 
 class CrawlerBase(ABC):
@@ -79,3 +80,30 @@ class LinkCrawler(CrawlerBase):
     def store(self, data, *args):
         """Store links in database or file"""
         self.storage.store(data, 'advertisements_links')
+
+
+class DataCrawler(CrawlerBase):
+    """Retrieve all advertisements data and store them"""
+
+    def __init__(self):
+        super().__init__()
+        self.links = self.__load_links()
+        self.parser = AdvertisementDataParser()
+
+    def __load_links(self):
+        """Load links from mongodb or file for crawl"""
+        return self.storage.load('advertisements_links', {'flag': False})
+
+    def start(self, store=False):
+        """Start to crawl saved links and retrieve data"""
+        for link in self.links:
+            response = self.get_page(link['url'])
+            data = self.parser.parse(response.text)
+            if store:
+                self.store(data, data.get('post_id'))
+            self.storage.update_flag(link)
+
+    def store(self, data, filename):
+        """Store data in database or file"""
+        self.storage.store(data, 'advertisement_data')
+        print(data['post_id'])
